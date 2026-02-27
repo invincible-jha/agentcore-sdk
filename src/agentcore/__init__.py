@@ -26,6 +26,8 @@ from __future__ import annotations
 
 __version__: str = "0.1.0"
 
+from agentcore.convenience import AgentCore, Event
+
 # ---------------------------------------------------------------------------
 # Schema
 # ---------------------------------------------------------------------------
@@ -118,6 +120,8 @@ from agentcore.health.check import CheckResult, HealthCheck, HealthReport, Healt
 
 __all__ = [
     "__version__",
+    "AgentCore",
+    "Event",
     # schema — events
     "EventType",
     "AgentEvent",

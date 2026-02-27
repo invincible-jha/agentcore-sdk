@@ -18,8 +18,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
-
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
@@ -66,7 +64,7 @@ class AgentConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _normalise_plugins(cls, values: Any) -> Any:  # noqa: ANN401
+    def _normalise_plugins(cls, values: object) -> object:
         """Ensure ``plugins`` is always a list, not None."""
         if isinstance(values, dict) and values.get("plugins") is None:
             values["plugins"] = []

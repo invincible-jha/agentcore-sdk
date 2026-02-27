@@ -94,24 +94,24 @@ class TestCallableAdapterSync:
         import inspect
         assert inspect.iscoroutinefunction(wrapped)
 
-    def test_wrap_sync_callable_returns_correct_result(self) -> None:
+    async def test_wrap_sync_callable_returns_correct_result(self) -> None:
         bus = EventBus()
         adapter = CallableAdapter("agent-1", bus)
         wrapped = adapter.wrap(lambda x, y: x + y)
-        result = asyncio.get_event_loop().run_until_complete(wrapped(3, 4))
+        result = await wrapped(3, 4)
         assert result == 7
 
-    def test_wrap_sync_emits_started_and_stopped_events(self) -> None:
+    async def test_wrap_sync_emits_started_and_stopped_events(self) -> None:
         bus = EventBus()
         events = _collect_events(bus)
         adapter = CallableAdapter("agent-1", bus)
         wrapped = adapter.wrap(lambda: "ok")
-        asyncio.get_event_loop().run_until_complete(wrapped())
+        await wrapped()
         event_types = [e.event_type for e in events]
         assert EventType.AGENT_STARTED in event_types
         assert EventType.AGENT_STOPPED in event_types
 
-    def test_wrap_sync_emits_error_event_on_exception(self) -> None:
+    async def test_wrap_sync_emits_error_event_on_exception(self) -> None:
         bus = EventBus()
         events = _collect_events(bus)
         adapter = CallableAdapter("agent-1", bus)
@@ -121,7 +121,7 @@ class TestCallableAdapterSync:
 
         wrapped = adapter.wrap(failing_fn)
         with pytest.raises(ValueError, match="boom"):
-            asyncio.get_event_loop().run_until_complete(wrapped())
+            await wrapped()
 
         event_types = [e.event_type for e in events]
         assert EventType.ERROR_OCCURRED in event_types
@@ -140,7 +140,7 @@ class TestCallableAdapterSync:
 
 
 class TestCallableAdapterAsync:
-    def test_wrap_async_callable_returns_correct_result(self) -> None:
+    async def test_wrap_async_callable_returns_correct_result(self) -> None:
         bus = EventBus()
         adapter = CallableAdapter("agent-2", bus)
 
@@ -148,10 +148,10 @@ class TestCallableAdapterAsync:
             return x * 2
 
         wrapped = adapter.wrap(async_double)
-        result = asyncio.get_event_loop().run_until_complete(wrapped(5))
+        result = await wrapped(5)
         assert result == 10
 
-    def test_wrap_async_emits_started_and_stopped_events(self) -> None:
+    async def test_wrap_async_emits_started_and_stopped_events(self) -> None:
         bus = EventBus()
         events = _collect_events(bus)
         adapter = CallableAdapter("agent-2", bus)
@@ -160,12 +160,12 @@ class TestCallableAdapterAsync:
             return "async"
 
         wrapped = adapter.wrap(async_fn)
-        asyncio.get_event_loop().run_until_complete(wrapped())
+        await wrapped()
         event_types = [e.event_type for e in events]
         assert EventType.AGENT_STARTED in event_types
         assert EventType.AGENT_STOPPED in event_types
 
-    def test_wrap_async_emits_error_event_on_exception(self) -> None:
+    async def test_wrap_async_emits_error_event_on_exception(self) -> None:
         bus = EventBus()
         events = _collect_events(bus)
         adapter = CallableAdapter("agent-2", bus)
@@ -175,19 +175,19 @@ class TestCallableAdapterAsync:
 
         wrapped = adapter.wrap(async_fail)
         with pytest.raises(RuntimeError):
-            asyncio.get_event_loop().run_until_complete(wrapped())
+            await wrapped()
 
         event_types = [e.event_type for e in events]
         assert EventType.ERROR_OCCURRED in event_types
 
-    def test_emit_events_swaps_bus(self) -> None:
+    async def test_emit_events_swaps_bus(self) -> None:
         bus1 = EventBus()
         bus2 = EventBus()
         events_on_bus2 = _collect_events(bus2)
         adapter = CallableAdapter("agent-2", bus1)
         adapter.emit_events(bus2)
         wrapped = adapter.wrap(lambda: None)
-        asyncio.get_event_loop().run_until_complete(wrapped())
+        await wrapped()
         assert len(events_on_bus2) >= 2
 
     def test_get_framework_name(self) -> None:

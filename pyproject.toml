@@ -31,7 +31,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-agentcore = ["agentcore-sdk>=0.1.0"]
 langchain = ["langchain-core>=0.1.0"]
 crewai = ["crewai>=0.1.0"]
 openai-agents = ["openai-agents>=0.1.0"]
