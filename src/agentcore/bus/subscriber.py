@@ -5,7 +5,7 @@ Shipped in this module
 - Subscriber          — structural Protocol for event handler callables
 - FilteredSubscriber  — wraps any handler with an EventFilter gate
 
-Withheld / internal
+Extension points
 -------------------
 Back-pressure aware subscribers, durable subscriptions with at-least-once
 delivery, and fan-out load balancing are available via plugins.

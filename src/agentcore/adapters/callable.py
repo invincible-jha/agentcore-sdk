@@ -7,10 +7,10 @@ Shipped in this module
 ----------------------
 - CallableAdapter   — wraps any sync/async callable with event emission
 
-Withheld / internal
--------------------
-Retry/back-pressure-aware wrappers and structured output extraction are
-available via plugins.
+Extension points
+----------------
+Retry/back-pressure-aware wrappers and structured output extraction can be
+implemented as plugins using the adapter extension API.
 """
 from __future__ import annotations
 

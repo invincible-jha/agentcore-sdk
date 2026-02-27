@@ -8,7 +8,7 @@ Shipped in this module
 - AgentIdentity       — re-export of the canonical dataclass
 - create_identity()   — ergonomic factory with sensible defaults
 
-Withheld / internal
+Extension points
 -------------------
 Cross-tenant identity minting, hardware-attested identities, and signed
 identity tokens are available via plugins.

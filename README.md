@@ -52,9 +52,8 @@ import agentcore
 
 ## Enterprise Upgrade
 
-The open-source edition provides the core foundation. For production
-deployments requiring SLA-backed support, advanced integrations, and the full
-agentcore platform, see [docs/UPGRADE_TO_agentcore.md](docs/UPGRADE_TO_agentcore.md).
+For production deployments requiring SLA-backed support and advanced
+integrations, contact the maintainers or see the commercial extensions documentation.
 
 ## Contributing
 

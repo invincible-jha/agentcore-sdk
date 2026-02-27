@@ -9,7 +9,7 @@ Shipped in this module
 - AgentIdentity   — dataclass capturing all stable identity fields
 - fingerprint()   — deterministic SHA-256 identity hash
 
-Withheld / internal
+Extension points
 -------------------
 Identity attestation, cross-tenant federation, and cryptographic signing of
 identities are not part of this open-source SDK and are available via plugins.

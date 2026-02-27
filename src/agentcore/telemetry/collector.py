@@ -8,7 +8,7 @@ Shipped in this module
 - MetricSummary   — aggregated stats for a single metric
 - MetricCollector — accumulator for count, sum, min, max, avg
 
-Withheld / internal
+Extension points
 -------------------
 Histogram bucketing, percentile estimation (p50/p99), rolling-window
 aggregation, and push-to-Prometheus adapters are available via plugins.

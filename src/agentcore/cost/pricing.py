@@ -10,7 +10,7 @@ Shipped in this module
 - MODEL_PRICING   — dict mapping canonical model IDs to PricingEntry
 - get_pricing()   — resolve a model ID to its PricingEntry, with fuzzy match
 
-Withheld / internal
+Extension points
 -------------------
 Real-time pricing API polling, volume-tier discounts, and multi-currency
 support are available via plugins.

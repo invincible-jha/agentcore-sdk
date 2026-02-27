@@ -11,7 +11,7 @@ Shipped in this module
 - ToolCallEvent   — specialised event for tool invocations
 - DecisionEvent   — specialised event for agent decisions
 
-Withheld / internal
+Extension points
 -------------------
 Persistence adapters, stream-encoding codecs, and schema-evolution helpers
 are not part of this open-source SDK and are available via plugins.
@@ -66,6 +66,9 @@ def _parse_base_fields(
 
     agent_id = str(payload["agent_id"])
 
+    aep_version_raw = payload.get("aep_version", "1.0.0")
+    aep_version = str(aep_version_raw) if aep_version_raw is not None else "1.0.0"
+
     data_raw = payload.get("data", {})
     data: dict[str, object] = dict(data_raw) if isinstance(data_raw, dict) else {}
 
@@ -81,6 +84,7 @@ def _parse_base_fields(
     return {
         "event_type": event_type,
         "agent_id": agent_id,
+        "aep_version": aep_version,
         "data": data,
         "metadata": metadata,
         "parent_event_id": parent_event_id,
@@ -99,6 +103,9 @@ class AgentEvent:
         One of the canonical ``EventType`` values.
     agent_id:
         Stable identifier for the agent that emitted this event.
+    aep_version:
+        Agent Event Protocol version string (semver).  Defaults to "1.0.0".
+        See AEP-001 specification for the full event envelope contract.
     data:
         Arbitrary payload specific to this event.  Keep values JSON-safe.
     metadata:
@@ -122,6 +129,7 @@ class AgentEvent:
     agent_id: str
 
     # Optional fields with sensible defaults
+    aep_version: str = "1.0.0"
     data: dict[str, object] = field(default_factory=dict)
     metadata: dict[str, object] = field(default_factory=dict)
     parent_event_id: str | None = None
@@ -142,6 +150,7 @@ class AgentEvent:
             its string value.
         """
         base: dict[str, object] = {
+            "aep_version": self.aep_version,
             "event_id": self.event_id,
             "event_type": self.event_type.value,
             "agent_id": self.agent_id,

@@ -8,7 +8,7 @@ Shipped in this module
 ----------------------
 - DEFAULT_CONFIG   — ``AgentConfig`` instance with sensible defaults
 
-Withheld / internal
+Extension points
 -------------------
 Environment-specific config profiles (staging vs production) and dynamic
 defaults driven by infrastructure discovery are available via plugins.

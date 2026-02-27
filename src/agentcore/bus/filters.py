@@ -13,7 +13,7 @@ Shipped in this module
 - MetadataFilter      — match by metadata key/value pair
 - CompositeFilter     — combine multiple filters with AND / OR semantics
 
-Withheld / internal
+Extension points
 -------------------
 Content-based routing, CEP (complex event processing) patterns, and
 Kafka/Pulsar topic mapping are available via plugins.

@@ -8,7 +8,7 @@ Shipped in this module
 ----------------------
 - AgentRegistry   — thread-safe CRUD registry for AgentIdentity objects
 
-Withheld / internal
+Extension points
 -------------------
 Distributed registry backends (Redis, etcd, Consul), TTL-based expiry, and
 cross-datacenter replication are available via plugins.

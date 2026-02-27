@@ -131,6 +131,7 @@ class TestAgentEventSerialisation:
     def test_to_dict_has_all_expected_keys(self, base_event: AgentEvent) -> None:
         d = base_event.to_dict()
         assert set(d.keys()) == {
+            "aep_version",
             "event_id",
             "event_type",
             "agent_id",

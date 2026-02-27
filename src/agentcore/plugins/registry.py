@@ -18,7 +18,7 @@ Shipped in this module
 - AgentPlugin                  — ABC for lifecycle plugins
 - AgentPluginRegistry          — registry + lifecycle management for AgentPlugins
 
-Withheld / internal
+Extension points
 -------------------
 Sandboxed plugin execution, cryptographic signing, and remote plugin
 registries are not part of this open-source SDK.

@@ -10,7 +10,7 @@ Shipped in this module
 - OTelBridge   — translates AgentEvents into OTel spans and metrics.
                  Falls back to no-op when ``opentelemetry-api`` is absent.
 
-Withheld / internal
+Extension points
 -------------------
 OTLP gRPC / HTTP exporters, baggage propagation, exemplar attachment, and
 span linking across distributed agent hops are available via plugins.

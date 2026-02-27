@@ -9,7 +9,7 @@ Shipped in this module
 - BudgetManager        — ABC for all budget managers
 - BasicBudgetManager   — in-memory implementation for dev / single-process
 
-Withheld / internal
+Extension points
 -------------------
 Persistent budget storage, cross-tenant budget sharing, proactive
 pre-flight cost estimation, and Slack/email budget-alert webhooks are

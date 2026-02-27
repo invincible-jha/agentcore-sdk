@@ -9,10 +9,10 @@ Shipped in this module
 ----------------------
 - LangChainAdapter   — wraps a LangChain runnable/agent chain with event emission
 
-Withheld / internal
--------------------
+Extension points
+----------------
 Token-level streaming capture, multi-chain correlation, and LangSmith
-integration shims are available via plugins.
+integration shims can be implemented as plugins using the adapter extension API.
 """
 from __future__ import annotations
 

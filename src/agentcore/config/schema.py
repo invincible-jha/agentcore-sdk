@@ -9,7 +9,7 @@ Shipped in this module
 - AgentConfig     — re-export with full Pydantic v2 validation
 - validate_config — standalone validation helper
 
-Withheld / internal
+Extension points
 -------------------
 Cross-field business rules, remote-schema validation, and versioned config
 migration are available via plugins.

@@ -9,7 +9,7 @@ Shipped in this module
 - IdentityProvider        — ABC defining the provider contract
 - BasicIdentityProvider   — in-memory implementation for dev / single-process
 
-Withheld / internal
+Extension points
 -------------------
 PKI-backed identity providers, OAuth-integrated agents, hardware-attested
 identities, and zero-trust rotation protocols are available via plugins.

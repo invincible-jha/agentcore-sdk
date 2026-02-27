@@ -8,7 +8,7 @@ Shipped in this module
 ----------------------
 - ConfigLoader   — multi-source config loader with auto-discovery
 
-Withheld / internal
+Extension points
 -------------------
 Remote config from AWS Secrets Manager / GCP Secret Manager, config hot-reload
 with inotify, and encrypted field decryption are available via plugins.

@@ -8,10 +8,10 @@ Shipped in this module
 ----------------------
 - CrewAIAdapter   — instruments a CrewAI ``Crew`` with event emission
 
-Withheld / internal
--------------------
+Extension points
+----------------
 Per-task cost attribution, hierarchical crew event correlation, and CrewAI
-Flow event mapping are available via plugins.
+Flow event mapping can be implemented as plugins using the adapter extension API.
 """
 from __future__ import annotations
 

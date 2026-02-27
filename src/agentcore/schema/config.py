@@ -8,7 +8,7 @@ Shipped in this module
 ----------------------
 - AgentConfig     — Pydantic v2 model with class-method loaders
 
-Withheld / internal
+Extension points
 -------------------
 Remote config fetching, encrypted secrets support, multi-environment
 configuration overlays, and hot-reload capabilities are available via plugins.

@@ -13,7 +13,7 @@ Shipped in this module
                       TelemetryError, CostTrackingError, PluginError,
                       AdapterError
 
-Withheld / internal
+Extension points
 -------------------
 Structured error reporting pipelines, Sentry integration, and
 error-correlation across distributed agents are available via plugins.

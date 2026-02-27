@@ -8,7 +8,7 @@ Shipped in this module
 - EventBus     — thread-safe pub/sub bus with async emit, sync wrapper,
                  event history, and exception-safe dispatch
 
-Withheld / internal
+Extension points
 -------------------
 Persistent event log replay, distributed fan-out over message brokers
 (Kafka, Pulsar, Redis Streams), and dead-letter queue handling are

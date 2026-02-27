@@ -11,7 +11,7 @@ Shipped in this module
 - JSONFileExporter   — appends JSON Lines to a file
 - NullExporter       — discards all data (no-op, useful in tests)
 
-Withheld / internal
+Extension points
 -------------------
 Prometheus push-gateway, Datadog, New Relic, and CloudWatch exporters are
 available via plugins.

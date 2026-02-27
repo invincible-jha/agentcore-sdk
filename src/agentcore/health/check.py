@@ -10,7 +10,7 @@ Shipped in this module
 - HealthReport    — aggregate report from :class:`HealthCheck`
 - HealthCheck     — registry and runner for named check functions
 
-Withheld / internal
+Extension points
 -------------------
 Prometheus ``/metrics`` endpoint integration, Kubernetes liveness/readiness
 probe adapters, and distributed health aggregation are available via plugins.

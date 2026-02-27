@@ -7,7 +7,7 @@ Shipped in this module
 ----------------------
 - PluginLoader   — discovers and loads plugins from multiple sources
 
-Withheld / internal
+Extension points
 -------------------
 Sandboxed plugin execution, cryptographic plugin signing, and remote plugin
 registries are not part of this open-source SDK.

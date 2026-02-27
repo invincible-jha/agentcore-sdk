@@ -7,10 +7,11 @@ Shipped in this module
 ----------------------
 - FrameworkAdapter   — ABC for all framework adapters
 
-Withheld / internal
--------------------
+Extension points
+----------------
 Streaming response adapters, multi-modal event capture, and distributed
-trace correlation across adapter boundaries are available via plugins.
+trace correlation across adapter boundaries can be implemented as plugins
+using the adapter extension API.
 """
 from __future__ import annotations
 

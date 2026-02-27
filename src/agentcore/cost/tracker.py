@@ -9,7 +9,7 @@ Shipped in this module
 - AgentCosts    — aggregated cost summary for an agent
 - CostTracker   — thread-safe cost accumulator
 
-Withheld / internal
+Extension points
 -------------------
 Cost-anomaly detection, multi-currency conversion, invoice generation,
 and per-project budget roll-ups are available via plugins.
