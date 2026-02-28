@@ -432,17 +432,3 @@ export function createAgentcoreClient(
   };
 }
 
-/** Re-export request/response types for convenience. */
-export type {
-  AgentConfig,
-  AgentConfigInput,
-  AgentEvent,
-  EmitEventRequest,
-  EmitEventResponse,
-  EventBusStatus,
-  EventSubscription,
-  EventType,
-  HistoryQueryOptions,
-  PluginDescriptor,
-  PluginListResult,
-};
