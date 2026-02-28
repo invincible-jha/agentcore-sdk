@@ -1,7 +1,7 @@
 {
-  "name": "@aumos/agentcore-types",
+  "name": "@aumos/agentcore",
   "version": "0.1.0",
-  "description": "TypeScript type definitions for AumOS AgentCore SDK — event schemas and identity interfaces",
+  "description": "TypeScript client for the AumOS agentcore-sdk — universal agent event types, identity contracts, event bus interface, plugin registry types, and config types",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -14,20 +14,18 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.0",
-    "jest": "^29.5.0",
-    "ts-jest": "^29.1.0",
     "typescript": "^5.3.0"
   },
   "keywords": [
     "aumos",
     "agentcore",
-    "ai-agents",
-    "event-schema",
+    "agent-events",
+    "agent-identity",
+    "event-bus",
+    "plugin-registry",
     "typescript"
   ],
   "repository": {

@@ -1,11 +1,38 @@
 /**
- * @aumos/agentcore-types — TypeScript type definitions for AumOS AgentCore SDK.
+ * @aumos/agentcore
  *
- * Provides TypeScript interfaces matching all Python event schemas and
- * identity structures from the agentcore-sdk and agent-identity packages.
+ * TypeScript client for the AumOS agentcore-sdk.
+ * Provides HTTP client, event builders, type definitions, and identity interfaces
+ * that mirror the Python agentcore-sdk schema contracts.
  */
 
-// Event interfaces and type guards
+// --- Client and configuration ---
+export type {
+  AgentcoreClient,
+  AgentcoreClientConfig,
+  EmitEventRequest,
+  EmitEventResponse,
+  HistoryQueryOptions,
+} from "./client.js";
+export { createAgentcoreClient } from "./client.js";
+
+// --- Core types (ApiResult, AgentEvent, AgentConfig, plugin/bus types) ---
+export type {
+  ApiError,
+  ApiResult,
+  EventType,
+  AgentEvent,
+  ToolCallEvent,
+  DecisionEvent,
+  AgentConfig,
+  AgentConfigInput,
+  PluginDescriptor,
+  PluginListResult,
+  EventSubscription,
+  EventBusStatus,
+} from "./types.js";
+
+// --- Full event schema catalogue (lifecycle, LLM, tool, memory, delegation, approval) ---
 export type {
   // Base
   BaseAgentEvent,
@@ -58,7 +85,7 @@ export {
   isApprovalRequestedEvent,
 } from "./events.js";
 
-// Identity interfaces
+// --- Identity interfaces (AgentIdentity, trust scoring, DID, certs, delegation) ---
 export type {
   AgentIdentity,
   TrustDimension,
