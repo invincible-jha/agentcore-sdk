@@ -1,26 +1,24 @@
 /**
- * Type-level tests for @aumos/agentcore-types event interfaces.
+ * Type-level and runtime tests for @aumos/agentcore-types event interfaces.
  *
- * These tests use TypeScript's type system to verify that the interfaces
- * are structurally sound and type guards work correctly.
+ * Covers:
+ * - TypeScript structural correctness of event interfaces
+ * - Type guard correctness at runtime
+ * - New: createAgentcoreClient with sdk-core error handling and retry behavior
  */
 
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   type AgentStartedEvent,
   type AgentCompletedEvent,
   type AgentFailedEvent,
-  type AgentPausedEvent,
-  type AgentResumedEvent,
   type LLMCalledEvent,
   type LLMRespondedEvent,
   type LLMStreamChunkEvent,
   type ToolInvokedEvent,
-  type ToolCompletedEvent,
-  type ToolFailedEvent,
   type MemoryReadEvent,
   type MemoryWrittenEvent,
   type DelegationRequestedEvent,
-  type DelegationCompletedEvent,
   type ApprovalRequestedEvent,
   type ApprovalResolvedEvent,
   type AnyAgentEvent,
@@ -34,6 +32,14 @@ import {
   isDelegationRequestedEvent,
   isApprovalRequestedEvent,
 } from "../src/index.js";
+import { createAgentcoreClient } from "../src/client.js";
+import {
+  HttpError,
+  NetworkError,
+  TimeoutError,
+  RateLimitError,
+  ServerError,
+} from "@aumos/sdk-core";
 
 // ---------------------------------------------------------------------------
 // Helper: create a base event stub for type assertion tests
@@ -354,6 +360,22 @@ describe("ApprovalRequestedEvent", () => {
   });
 });
 
+describe("ApprovalResolvedEvent", () => {
+  it("should satisfy the ApprovalResolvedEvent interface", () => {
+    const event: ApprovalResolvedEvent = {
+      ...makeBase("approval_resolved"),
+      event_type: "approval_resolved",
+      approval_id: "apr-001",
+      approved: true,
+      reviewed_by: "human-reviewer",
+      review_comment: "Approved after review",
+      resolution_latency_ms: 5000,
+    };
+    expect(event.approved).toBe(true);
+    expect(event.reviewed_by).toBe("human-reviewer");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Identity type assertions
 // ---------------------------------------------------------------------------
@@ -389,5 +411,295 @@ describe("TrustScore", () => {
     };
     expect(score.composite).toBeGreaterThan(0);
     expect(score.level).toBe("HIGH");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NEW: createAgentcoreClient — sdk-core error handling integration tests
+// ---------------------------------------------------------------------------
+
+describe("createAgentcoreClient — sdk-core error handling", () => {
+  const BASE_URL = "http://localhost:18080";
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns ok:true with data on 200 responses", async () => {
+    const mockIdentity: AgentIdentity = {
+      agent_id: "agent-test-1",
+      name: "test-agent",
+      version: "1.0.0",
+      framework: "test",
+      model: "claude-sonnet-4-6",
+      created_at: "2024-01-01T00:00:00Z",
+      metadata: {},
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === "content-type" ? "application/json" : null,
+          forEach: (cb: (v: string, k: string) => void) => {
+            cb("application/json", "content-type");
+          },
+        },
+        json: vi.fn().mockResolvedValue(mockIdentity),
+        text: vi.fn().mockResolvedValue(JSON.stringify(mockIdentity)),
+      }),
+    );
+
+    const client = createAgentcoreClient({ baseUrl: BASE_URL, maxRetries: 0 });
+    const result = await client.getIdentity("agent-test-1");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.agent_id).toBe("agent-test-1");
+    }
+  });
+
+  it("returns ok:false with status 404 on not-found responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === "content-type" ? "application/json" : null,
+          forEach: (cb: (v: string, k: string) => void) => {
+            cb("application/json", "content-type");
+          },
+        },
+        json: vi.fn().mockResolvedValue({
+          error: "Agent not found",
+          detail: "No agent with the given ID",
+        }),
+        text: vi.fn().mockResolvedValue(""),
+      }),
+    );
+
+    const client = createAgentcoreClient({ baseUrl: BASE_URL, maxRetries: 0 });
+    const result = await client.getIdentity("nonexistent");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(404);
+      expect(result.error.error).toBe("Agent not found");
+    }
+  });
+
+  it("returns ok:false with status 429 on rate limit responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: {
+          get: (name: string) => {
+            if (name.toLowerCase() === "content-type") return "application/json";
+            if (name.toLowerCase() === "retry-after") return "60";
+            return null;
+          },
+          forEach: (cb: (v: string, k: string) => void) => {
+            cb("application/json", "content-type");
+            cb("60", "retry-after");
+          },
+        },
+        json: vi.fn().mockResolvedValue({ error: "Rate limit exceeded", detail: "" }),
+        text: vi.fn().mockResolvedValue(""),
+      }),
+    );
+
+    const client = createAgentcoreClient({ baseUrl: BASE_URL, maxRetries: 0 });
+    const result = await client.listPlugins();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(429);
+    }
+  });
+
+  it("returns ok:false with status 500 on server error responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === "content-type" ? "application/json" : null,
+          forEach: (cb: (v: string, k: string) => void) => {
+            cb("application/json", "content-type");
+          },
+        },
+        json: vi.fn().mockResolvedValue({ error: "Server error", detail: "DB timeout" }),
+        text: vi.fn().mockResolvedValue(""),
+      }),
+    );
+
+    const client = createAgentcoreClient({ baseUrl: BASE_URL, maxRetries: 0 });
+    const result = await client.getBusStatus();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(500);
+    }
+  });
+
+  it("returns ok:false on network failure (fetch throws)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new TypeError("Failed to fetch")),
+    );
+
+    const client = createAgentcoreClient({ baseUrl: BASE_URL, maxRetries: 0 });
+    const result = await client.getBusStatus();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(0);
+      expect(result.error.error).toMatch(/network error/i);
+    }
+  });
+
+  it("exposes events emitter for lifecycle observability", () => {
+    const client = createAgentcoreClient({ baseUrl: BASE_URL, maxRetries: 0 });
+    expect(typeof client.events.on).toBe("function");
+    expect(typeof client.events.off).toBe("function");
+    expect(typeof client.events.emit).toBe("function");
+  });
+
+  it("fires request:start and request:end events on successful call", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === "content-type" ? "application/json" : null,
+          forEach: (cb: (v: string, k: string) => void) => {
+            cb("application/json", "content-type");
+          },
+        },
+        json: vi.fn().mockResolvedValue({ plugin_names: [], count: 0 }),
+        text: vi.fn().mockResolvedValue(""),
+      }),
+    );
+
+    const client = createAgentcoreClient({ baseUrl: BASE_URL, maxRetries: 0 });
+
+    const startEvents: string[] = [];
+    const endEvents: string[] = [];
+
+    client.events.on("request:start", () => {
+      startEvents.push("start");
+    });
+    client.events.on("request:end", () => {
+      endEvents.push("end");
+    });
+
+    await client.listPlugins();
+
+    expect(startEvents).toHaveLength(1);
+    expect(endEvents).toHaveLength(1);
+  });
+
+  it("retries on 503 and succeeds on second attempt", async () => {
+    let callCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            statusText: "Service Unavailable",
+            headers: {
+              get: () => null,
+              forEach: () => undefined,
+            },
+            json: vi.fn().mockResolvedValue({ error: "Service down", detail: "" }),
+            text: vi.fn().mockResolvedValue(""),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === "content-type" ? "application/json" : null,
+            forEach: (cb: (v: string, k: string) => void) => {
+              cb("application/json", "content-type");
+            },
+          },
+          json: vi.fn().mockResolvedValue({ plugin_names: ["p1"], count: 1 }),
+          text: vi.fn().mockResolvedValue(""),
+        });
+      }),
+    );
+
+    const retryEvents: number[] = [];
+    const client = createAgentcoreClient({
+      baseUrl: BASE_URL,
+      maxRetries: 2,
+    });
+    client.events.on("request:retry", ({ payload }) => {
+      retryEvents.push(payload.attempt);
+    });
+
+    const result = await client.listPlugins();
+
+    expect(result.ok).toBe(true);
+    expect(callCount).toBe(2);
+    expect(retryEvents).toHaveLength(1);
+    expect(retryEvents[0]).toBe(0);
+  });
+
+  it("constructs query params correctly for getHistory with all options", async () => {
+    let capturedUrl = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        capturedUrl = url;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === "content-type" ? "application/json" : null,
+            forEach: (cb: (v: string, k: string) => void) => {
+              cb("application/json", "content-type");
+            },
+          },
+          json: vi.fn().mockResolvedValue([]),
+          text: vi.fn().mockResolvedValue(""),
+        });
+      }),
+    );
+
+    const client = createAgentcoreClient({ baseUrl: BASE_URL, maxRetries: 0 });
+    await client.getHistory({
+      agentId: "agent-1",
+      eventType: "tool_called",
+      limit: 50,
+    });
+
+    expect(capturedUrl).toContain("agent_id=agent-1");
+    expect(capturedUrl).toContain("event_type=tool_called");
+    expect(capturedUrl).toContain("limit=50");
   });
 });

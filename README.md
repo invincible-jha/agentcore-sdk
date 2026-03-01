@@ -21,6 +21,14 @@ Part of the [AumOS](https://github.com/aumos-ai) open-source agent infrastructur
 - Extensible plugin architecture via Python entry-points — implement `AgentPlugin`, declare an entry-point, and the registry auto-discovers your plugin at startup
 - Adapters for LangChain and CrewAI that translate framework-native events into `AgentEvent` payloads
 
+## Current Limitations
+
+> **Transparency note**: We list known limitations to help you evaluate fit.
+
+- **Event Bus**: Single-process in-memory event bus. No distributed message queue (RabbitMQ, Kafka).
+- **Execution**: No built-in agent execution loop — provides substrate, not runtime.
+- **Scale**: Designed for single-node deployment.
+
 ## Quick Start
 
 Install from PyPI:

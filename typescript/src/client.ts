@@ -1,8 +1,12 @@
 /**
  * HTTP client for the agentcore-sdk server API.
  *
- * Uses the Fetch API (available natively in Node 18+, browsers, and Deno).
- * No external dependencies required.
+ * Backed by @aumos/sdk-core's createHttpClient which provides automatic retry
+ * with exponential backoff, typed error hierarchy, request lifecycle events,
+ * and abort signal support.
+ *
+ * The public API surface is unchanged — all methods still return ApiResult<T>
+ * so existing callers require no migration work.
  *
  * @example
  * ```ts
@@ -10,7 +14,6 @@
  *
  * const client = createAgentcoreClient({ baseUrl: "http://localhost:8080" });
  *
- * // Register a new agent identity
  * const identity = await client.createIdentity({
  *   agent_name: "research-agent",
  *   agent_version: "1.0.0",
@@ -28,6 +31,19 @@
  * }
  * ```
  */
+
+import {
+  createHttpClient,
+  HttpError,
+  NetworkError,
+  TimeoutError,
+  RateLimitError,
+  ServerError,
+  ValidationError,
+  AumosError,
+} from "@aumos/sdk-core";
+
+import type { HttpClient, SdkEventEmitter } from "@aumos/sdk-core";
 
 import type {
   AgentConfig,
@@ -57,6 +73,8 @@ export interface AgentcoreClientConfig {
   readonly timeoutMs?: number;
   /** Optional extra HTTP headers sent with every request. */
   readonly headers?: Readonly<Record<string, string>>;
+  /** Optional maximum retry count. Defaults to 3. */
+  readonly maxRetries?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,55 +112,110 @@ export interface HistoryQueryOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal adapter — bridges HttpClient throws into ApiResult<T>
 // ---------------------------------------------------------------------------
 
-async function fetchJson<T>(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
+/**
+ * Converts a structured api error body to the canonical ApiError shape.
+ * Handles both full {error, detail} bodies and plain string messages.
+ */
+function extractApiError(body: unknown, fallbackMessage: string): ApiError {
+  if (
+    body !== null &&
+    typeof body === "object" &&
+    "error" in body &&
+    typeof (body as Record<string, unknown>)["error"] === "string"
+  ) {
+    const candidate = body as Partial<{ error: string; detail: string }>;
+    return {
+      error: candidate.error ?? fallbackMessage,
+      detail: candidate.detail ?? "",
+    };
+  }
+  return { error: fallbackMessage, detail: "" };
+}
+
+/**
+ * Wraps an sdk-core HttpClient call, translating thrown AumosError instances
+ * into the ApiResult<T> discriminated-union format.
+ *
+ * This adapter preserves 100% backward compatibility: existing callers that
+ * pattern-match on { ok, data } / { ok, error, status } continue to work.
+ * New callers can additionally attach listeners to `client.events` for
+ * structured retry / lifecycle observability.
+ */
+async function executeApiCall<T>(
+  call: () => Promise<T>,
 ): Promise<ApiResult<T>> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    const body = (await response.json()) as unknown;
-
-    if (!response.ok) {
-      const errorBody = body as Partial<ApiError>;
+    const data = await call();
+    return { ok: true, data };
+  } catch (error: unknown) {
+    if (error instanceof RateLimitError) {
+      return {
+        ok: false,
+        error: extractApiError(error.body, "Rate limit exceeded"),
+        status: 429,
+      };
+    }
+    if (error instanceof ValidationError) {
       return {
         ok: false,
         error: {
-          error: errorBody.error ?? "Unknown error",
-          detail: errorBody.detail ?? "",
+          error: "Validation failed",
+          detail: Object.entries(error.fields)
+            .map(([field, messages]) => `${field}: ${messages.join(", ")}`)
+            .join("; "),
         },
-        status: response.status,
+        status: 422,
       };
     }
-
-    return { ok: true, data: body as T };
-  } catch (err: unknown) {
-    clearTimeout(timeoutId);
-    const message = err instanceof Error ? err.message : String(err);
+    if (error instanceof ServerError) {
+      return {
+        ok: false,
+        error: extractApiError(error.body, `Server error: HTTP ${error.statusCode}`),
+        status: error.statusCode,
+      };
+    }
+    if (error instanceof HttpError) {
+      return {
+        ok: false,
+        error: extractApiError(error.body, `HTTP error: ${error.statusCode}`),
+        status: error.statusCode,
+      };
+    }
+    if (error instanceof TimeoutError) {
+      return {
+        ok: false,
+        error: { error: "Request timed out", detail: error.message },
+        status: 0,
+      };
+    }
+    if (error instanceof NetworkError) {
+      return {
+        ok: false,
+        error: {
+          error: "Network error",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+        status: 0,
+      };
+    }
+    if (error instanceof AumosError) {
+      return {
+        ok: false,
+        error: { error: error.code, detail: error.message },
+        status: error.statusCode ?? 0,
+      };
+    }
+    // Unknown errors — surface generically
+    const message = error instanceof Error ? error.message : String(error);
     return {
       ok: false,
-      error: { error: "Network error", detail: message },
+      error: { error: "Unknown error", detail: message },
       status: 0,
     };
   }
-}
-
-function buildHeaders(
-  extraHeaders: Readonly<Record<string, string>> | undefined,
-): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    ...extraHeaders,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +224,19 @@ function buildHeaders(
 
 /** Typed HTTP client for the agentcore-sdk server. */
 export interface AgentcoreClient {
+  /**
+   * Typed event emitter exposed from the underlying sdk-core HttpClient.
+   * Attach listeners here to observe request lifecycle, retries, and errors.
+   *
+   * @example
+   * ```ts
+   * client.events.on("request:retry", ({ payload }) => {
+   *   console.warn(`Retry attempt ${payload.attempt}, delay ${payload.delayMs}ms`);
+   * });
+   * ```
+   */
+  readonly events: SdkEventEmitter;
+
   // --- Identity management ---
 
   /**
@@ -269,166 +355,159 @@ export interface AgentcoreClient {
 /**
  * Create a typed HTTP client for the agentcore-sdk server.
  *
+ * Internally uses @aumos/sdk-core's createHttpClient for automatic retry,
+ * typed errors, and request lifecycle events. The public API remains identical
+ * to the previous version — all methods return ApiResult<T>.
+ *
  * @param config - Client configuration including base URL.
- * @returns An AgentcoreClient instance backed by the Fetch API.
+ * @returns An AgentcoreClient instance.
  */
 export function createAgentcoreClient(
   config: AgentcoreClientConfig,
 ): AgentcoreClient {
-  const { baseUrl, timeoutMs = 30_000, headers: extraHeaders } = config;
-  const baseHeaders = buildHeaders(extraHeaders);
+  const httpClient: HttpClient = createHttpClient({
+    baseUrl: config.baseUrl,
+    timeout: config.timeoutMs ?? 30_000,
+    maxRetries: config.maxRetries ?? 3,
+    defaultHeaders: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(config.headers as Record<string, string> | undefined),
+    },
+  });
 
   return {
+    events: httpClient.events,
+
     // --- Identity management ---
 
-    async createIdentity(
+    createIdentity(
       agentConfig: AgentConfig,
     ): Promise<ApiResult<AgentIdentity>> {
-      return fetchJson<AgentIdentity>(
-        `${baseUrl}/agents`,
-        {
-          method: "POST",
-          headers: baseHeaders,
-          body: JSON.stringify(agentConfig),
-        },
-        timeoutMs,
+      return executeApiCall(() =>
+        httpClient.post<AgentIdentity>("/agents", agentConfig).then((r) => r.data),
       );
     },
 
-    async getIdentity(agentId: string): Promise<ApiResult<AgentIdentity>> {
-      return fetchJson<AgentIdentity>(
-        `${baseUrl}/agents/${encodeURIComponent(agentId)}`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+    getIdentity(agentId: string): Promise<ApiResult<AgentIdentity>> {
+      return executeApiCall(() =>
+        httpClient
+          .get<AgentIdentity>(`/agents/${encodeURIComponent(agentId)}`)
+          .then((r) => r.data),
       );
     },
 
-    async updateConfig(
+    updateConfig(
       agentId: string,
       updates: AgentConfigInput,
     ): Promise<ApiResult<AgentConfig>> {
-      return fetchJson<AgentConfig>(
-        `${baseUrl}/agents/${encodeURIComponent(agentId)}/config`,
-        {
-          method: "PATCH",
-          headers: baseHeaders,
-          body: JSON.stringify(updates),
-        },
-        timeoutMs,
+      return executeApiCall(() =>
+        httpClient
+          .patch<AgentConfig>(
+            `/agents/${encodeURIComponent(agentId)}/config`,
+            updates,
+          )
+          .then((r) => r.data),
       );
     },
 
-    async getConfig(agentId: string): Promise<ApiResult<AgentConfig>> {
-      return fetchJson<AgentConfig>(
-        `${baseUrl}/agents/${encodeURIComponent(agentId)}/config`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+    getConfig(agentId: string): Promise<ApiResult<AgentConfig>> {
+      return executeApiCall(() =>
+        httpClient
+          .get<AgentConfig>(`/agents/${encodeURIComponent(agentId)}/config`)
+          .then((r) => r.data),
       );
     },
 
     // --- Event bus ---
 
-    async emitEvent(
-      event: AgentEvent,
-    ): Promise<ApiResult<EmitEventResponse>> {
-      return fetchJson<EmitEventResponse>(
-        `${baseUrl}/events`,
-        {
-          method: "POST",
-          headers: baseHeaders,
-          body: JSON.stringify(event),
-        },
-        timeoutMs,
+    emitEvent(event: AgentEvent): Promise<ApiResult<EmitEventResponse>> {
+      return executeApiCall(() =>
+        httpClient
+          .post<EmitEventResponse>("/events", event)
+          .then((r) => r.data),
       );
     },
 
-    async getHistory(
+    getHistory(
       options: HistoryQueryOptions = {},
     ): Promise<ApiResult<readonly AnyAgentEvent[]>> {
-      const params = new URLSearchParams();
+      const queryParams: Record<string, string> = {};
       if (options.agentId !== undefined) {
-        params.set("agent_id", options.agentId);
+        queryParams["agent_id"] = options.agentId;
       }
       if (options.eventType !== undefined) {
-        params.set("event_type", options.eventType);
+        queryParams["event_type"] = options.eventType;
       }
       if (options.limit !== undefined) {
-        params.set("limit", String(options.limit));
+        queryParams["limit"] = String(options.limit);
       }
-      const queryString = params.toString();
-      const url = queryString
-        ? `${baseUrl}/events/history?${queryString}`
-        : `${baseUrl}/events/history`;
-      return fetchJson<readonly AnyAgentEvent[]>(
-        url,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+
+      return executeApiCall(() =>
+        httpClient
+          .get<readonly AnyAgentEvent[]>("/events/history", { queryParams })
+          .then((r) => r.data),
       );
     },
 
-    async getBusStatus(): Promise<ApiResult<EventBusStatus>> {
-      return fetchJson<EventBusStatus>(
-        `${baseUrl}/events/bus/status`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+    getBusStatus(): Promise<ApiResult<EventBusStatus>> {
+      return executeApiCall(() =>
+        httpClient
+          .get<EventBusStatus>("/events/bus/status")
+          .then((r) => r.data),
       );
     },
 
     // --- Plugin registry ---
 
-    async listPlugins(): Promise<ApiResult<PluginListResult>> {
-      return fetchJson<PluginListResult>(
-        `${baseUrl}/plugins`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+    listPlugins(): Promise<ApiResult<PluginListResult>> {
+      return executeApiCall(() =>
+        httpClient.get<PluginListResult>("/plugins").then((r) => r.data),
       );
     },
 
-    async getPlugin(pluginName: string): Promise<ApiResult<PluginDescriptor>> {
-      return fetchJson<PluginDescriptor>(
-        `${baseUrl}/plugins/${encodeURIComponent(pluginName)}`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+    getPlugin(pluginName: string): Promise<ApiResult<PluginDescriptor>> {
+      return executeApiCall(() =>
+        httpClient
+          .get<PluginDescriptor>(`/plugins/${encodeURIComponent(pluginName)}`)
+          .then((r) => r.data),
       );
     },
 
-    async discoverPlugins(): Promise<ApiResult<PluginListResult>> {
-      return fetchJson<PluginListResult>(
-        `${baseUrl}/plugins/discover`,
-        { method: "POST", headers: baseHeaders },
-        timeoutMs,
+    discoverPlugins(): Promise<ApiResult<PluginListResult>> {
+      return executeApiCall(() =>
+        httpClient
+          .post<PluginListResult>("/plugins/discover")
+          .then((r) => r.data),
       );
     },
 
     // --- Subscriptions ---
 
-    async subscribe(options: {
+    subscribe(options: {
       eventType: EventType | "all";
       webhookUrl: string;
     }): Promise<ApiResult<EventSubscription>> {
-      return fetchJson<EventSubscription>(
-        `${baseUrl}/events/subscriptions`,
-        {
-          method: "POST",
-          headers: baseHeaders,
-          body: JSON.stringify({
+      return executeApiCall(() =>
+        httpClient
+          .post<EventSubscription>("/events/subscriptions", {
             event_type: options.eventType,
             webhook_url: options.webhookUrl,
-          }),
-        },
-        timeoutMs,
+          })
+          .then((r) => r.data),
       );
     },
 
-    async unsubscribe(
+    unsubscribe(
       subscriptionId: string,
     ): Promise<ApiResult<Record<string, never>>> {
-      return fetchJson<Record<string, never>>(
-        `${baseUrl}/events/subscriptions/${encodeURIComponent(subscriptionId)}`,
-        { method: "DELETE", headers: baseHeaders },
-        timeoutMs,
+      return executeApiCall(() =>
+        httpClient
+          .delete<Record<string, never>>(
+            `/events/subscriptions/${encodeURIComponent(subscriptionId)}`,
+          )
+          .then((r) => r.data),
       );
     },
   };
 }
-
